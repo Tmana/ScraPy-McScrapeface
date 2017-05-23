@@ -58,7 +58,7 @@ def tiny_file_rename(newname, folder_of_download):
 
 
 
-def pinellas_scrape():
+def pinellas_scrape(begin_date = "", end_date = ""):
 
 
     # initializing variables
@@ -70,10 +70,11 @@ def pinellas_scrape():
     last_instrument = ""
     i = 0
 
-    date1 = input("Please input a start date (mm-dd-yyyy):")
-    begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
-    date2 = input("Please input an end date (mm-dd-yyyy):")
-    end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
+    if begin_date == "":
+        date1 = input("Please input a start date (mm-dd-yyyy):")
+        begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
+        date2 = input("Please input an end date (mm-dd-yyyy):")
+        end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
 
     delta_date = end_date - begin_date
     os.chdir(download_path)
@@ -102,12 +103,12 @@ def pinellas_scrape():
     # loop over day range
     for i in range(delta_date.days + 1):
 
-        # grabbing a new url query for each day
-        temp_day = begin_date + datetime.timedelta(days=i)
-        print("day: ", temp_day)
-        url = "https://public.co.pinellas.fl.us/officialrec/officialrec/DMDAResults2.jsp?RowsPerPage=500&searchtype=NAME&orname=&orbegdate={0}&orenddate={1}&doctype=DEED&currpage=&recordcount=18855&mindate=05%2F10%2F1941&maxdate=03%2F07%2F2017&booknb=&bookpagenb=&nameSearchType=F&desctext=&instrument=&RowsPerPage=500&pageNumber=1".format(temp_day.strftime("%m/%d/%Y"), temp_day.strftime("%m/%d/%Y"))
-
         try:
+            # grabbing a new url query for each day
+            temp_day = begin_date + datetime.timedelta(days=i)
+            print("day: ", temp_day)
+            url = "https://public.co.pinellas.fl.us/officialrec/officialrec/DMDAResults2.jsp?RowsPerPage=500&searchtype=NAME&orname=&orbegdate={0}&orenddate={1}&doctype=DEED&currpage=&recordcount=18855&mindate=05%2F10%2F1941&maxdate=03%2F07%2F2017&booknb=&bookpagenb=&nameSearchType=F&desctext=&instrument=&RowsPerPage=500&pageNumber=1".format(temp_day.strftime("%m/%d/%Y"), temp_day.strftime("%m/%d/%Y"))
+
             #now that we've landed past the captcha, and have a valid session, move to the search query
             driver.get(url)
             
@@ -159,6 +160,11 @@ def pinellas_scrape():
                     print( "\n[*] Downloaded %d files" %(i+1))
                     
             else:
+                # grabbing a new url query for each day
+                temp_day = begin_date + datetime.timedelta(days=i)
+                print("day: ", temp_day)
+                url = "https://public.co.pinellas.fl.us/officialrec/officialrec/DMDAResults2.jsp?RowsPerPage=500&searchtype=NAME&orname=&orbegdate={0}&orenddate={1}&doctype=DEED&currpage=&recordcount=18855&mindate=05%2F10%2F1941&maxdate=03%2F07%2F2017&booknb=&bookpagenb=&nameSearchType=F&desctext=&instrument=&RowsPerPage=500&pageNumber=1".format(temp_day.strftime("%m/%d/%Y"), temp_day.strftime("%m/%d/%Y"))
+
                 html = driver.page_source #grabbing html from selenium driver
                 soup = BeautifulSoup(html, "lxml") # using beautifulsoup to parse the website html
                 table = soup.find('table', {"id": "tableA"})
@@ -210,9 +216,14 @@ def pinellas_scrape():
 
         except FileNotFoundError:
             print("File Not Found!", instrument)
-            pass
+            continue
         except IndexError as e:
             print('index error!', e, sys.stderr)
+            try:
+                break
+            finally:
+                print("Session expired, please re-enter new captcha")
+                pinellas_scrape(temp_day, end_date)
         except:
             print("Unexpected error:", sys.stderr, sys.exc_info())
             pass
