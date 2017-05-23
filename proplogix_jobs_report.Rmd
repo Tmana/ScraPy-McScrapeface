@@ -1,0 +1,856 @@
+---
+title: "proplogix_jobs_report"
+output: html_document
+---
+```{r}
+library(rgdal)    # for readOGR and others
+library(sp)       # for spatial objects
+library(leaflet)  # for interactive maps (NOT leafletR here)
+library(dplyr)    # for working with data frames
+library(ggplot2)  # for plotting
+library(data.table)# for easy data manipulation
+library(acs)
+library(stringr)
+library(stringdist)
+library(choroplethr) # for maps
+library(choroplethrMaps)
+library(scales)
+library(Amelia)
+library(splitstackshape) #for data.table friendly string splitting
+#devtools::install_github("dgrtwo/gganimate")
+library(gganimate)
+library(viznetwork)
+#options(scipen=999)
+```
+
+########################################
+## proplogix scraped deed final_data  ##
+########################################
+
+```{r}
+file <- fread("C:/Users/trobart/Desktop/Deeds/final_deed_data/final_data7.csv")
+nrow(file)
+names(file)[3] <- "Parcel ID Number"
+# title agent explicit munging
+#removing unwanted parts of title agent
+
+file[`Title Agent`  %like%  "p. a.", `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "p. l.", `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "p.a.",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "p.l.",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "pl",    `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "pllc",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "inc.",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like%  "llc",   `Title Company` := `Title Agent`]
+
+file[`Title Agent`  %like% "p. a.",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "p. l.",  `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "p.a.",   `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "p.l.",   `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "pllc",   `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "inc.",   `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "llc",    `Title Company` := `Title Agent`]
+file[`Title Agent`  %like% "title",  `Title Company` := `Title Agent`]
+
+
+file[,`Title Agent` := gsub(" esquire","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub(" attorney at law","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub(" attorney","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub(" an employee of","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub(" esq.","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub(" esq","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub("attn ","", tolower(`Title Agent`))]
+file[,`Title Agent` := gsub("attn","", tolower(`Title Agent`))]
+
+
+file[,`Title Agent` := gsub("[^[:alnum:] ]", "", tolower(`Title Agent`))]
+
+#company explicit munging
+file[,`Title Company` := gsub(" esquire","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" attorney at law","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" attorney","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" an employee of","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" esq.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" esq","", tolower(`Title Company`))]
+file[,`Title Company` := gsub("attn ","", tolower(`Title Company`))]
+file[,`Title Company` := gsub("attn","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", p. a.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", p. l.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", p.a.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", p.l.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", pl","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", pllc","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", inc.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(", llc","", tolower(`Title Company`))]
+
+file[,`Title Company` := gsub(" p. a.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" p. l.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" p.a.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" p.l.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" pllc","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" inc.","", tolower(`Title Company`))]
+file[,`Title Company` := gsub(" llc","", tolower(`Title Company`))]
+
+file[,`Title Company` := gsub("[^[:alnum:] ]", "", tolower(`Title Company`))]
+```
+
+#######################################################
+### Loading and munging proplogix job records data  ###
+#######################################################
+
+```{r}
+prop_jobs <- fread("C:/Users/trobart/Downloads/tannersRequest.csv")
+missmap(prop_jobs)
+nrow(prop_jobs)
+
+
+prop_jobs <- cSplit(prop_jobs, "Agency", "- ")
+prop_jobs[!is.na(Agency_3),Agency_2 := Agency_3]
+prop_jobs[,Location := Agency_2]
+prop_jobs[,Agency := Agency_1]
+prop_jobs[,c("Agency_1","Agency_2", "Agency_3") := NULL]
+
+#munging special formatting characters out
+prop_jobs[,`Agent` := gsub("[^[:alnum:] ]","", tolower(`Agent`))]
+prop_jobs[,`Agency` := gsub("[^[:alnum:] ]","", tolower(`Agency`))]
+prop_jobs[,`PropertyId` := gsub("[^[:alnum:] ]","", `PropertyId`)]
+prop_jobs[,`PropertyId` := gsub(" ","", `PropertyId`)]
+
+
+agents <- tolower(unique(prop_jobs$Agent))
+agencies <- tolower(unique(prop_jobs$Agency))
+
+
+prop_all_title_names <- unique(append(agents, agencies))
+length(prop_all_title_names) #1869 unique client individuals and companies
+
+```
+## remove and replace duplicate entries with the shortest version
+```{r}
+for (i in 1:length(prop_all_title_names)){
+  if (length(prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]]) > 1){
+    print("boop")
+    shorter <- min(prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]])
+    prop_jobs[`Agency` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Agency` := shorter]
+    prop_jobs[`Agent` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Agent` := shorter]
+  }
+}
+
+
+agents <- tolower(unique(prop_jobs$Agent))
+agencies <- tolower(unique(prop_jobs$Agency))
+prop_all_title_names <- unique(append(agents, agencies))
+length(prop_all_title_names) #1828 unique client individuals and companies after correcting duplicates
+
+#pure intersection of prop records and deed data
+intersect_title_agents <- intersect(prop_all_title_names, file$`Title Agent`) #note right now this is just hillsborough
+intersect_title_companies <- intersect(prop_all_title_names, file$`Title Company`)
+
+intersect_title_agents
+intersect_title_companies
+
+# Hillsborough only agents and agencies in prop data 
+hills_agents <- tolower(unique(prop_jobs[County == "Hillsborough"]$Agent))
+hills_agencies <- tolower(unique(prop_jobs[County == "Hillsborough"]$Agency))
+hills_all_title_names <- unique(append(hills_agents, hills_agencies))
+
+
+length(hills_all_title_names)
+```
+
+##########################################################
+### sorting and evaluation of usable/missing deed data ###
+##########################################################
+
+
+#### Title Agent/ Company ####
+
+```{r}
+# missing data counts and map
+missmap(file)
+1- length(file$`Title Agent`[ file$`Title Agent` == ""])/nrow(file) # currently 54.9% present data for title agent
+1- length(file$`Title Company`[ file$`Title Company` == ""])/nrow(file) # currently 7% present data for title company 
+1- length(file$`Parcel ID Number`[ file$`Parcel ID Number` == ""])/nrow(file) # currently .74% present data for parcel ID
+### removing missing ###
+
+reduced <- file[`Title Agent` != "",] # leaves 27144 records in our test case
+parcel_reduced <- file[`Parcel ID Number` != "",]
+
+#sorting for largest counts of title agent
+title_agents_count <- sort(table(reduced$`Title Agent`),decreasing = TRUE)
+title_company_count <- sort(table(reduced$`Title Company`),decreasing = TRUE)
+
+summary(title_agents_count)# 27564 cases
+nrow(title_agents_count) #7876 unique values
+
+summary(title_company_count)# 3615 cases
+nrow(title_company_count) #463 unique values
+
+#quick look at top 10
+title_agents_count[0:10]
+title_company_count[0:10]
+
+
+deed_agents <- tolower(unique(reduced$`Title Agent`))
+deed_agencies <- tolower(unique(reduced$`Title Agency`))
+
+
+deed_all_title_names <- unique(append(deed_agents, deed_agencies))
+length(deed_all_title_names)
+
+
+for (i in 1:length(prop_all_title_names)){
+  if (length(deed_all_title_names[deed_all_title_names %like% prop_all_title_names[i]]) > 1){
+    print("boop")
+    shorter <- min(deed_all_title_names[deed_all_title_names %like% prop_all_title_names[i]])
+    reduced[`Title Company` %like% prop_all_title_names[i], `Title Company` := shorter]
+    reduced[`Title Agent` %like% prop_all_title_names[i], `Title Agent` := shorter]
+  }
+}
+
+deed_agents <- tolower(unique(reduced$`Title Agent`))
+deed_agencies <- tolower(unique(reduced$`Title Agency`))
+
+
+deed_all_title_names <- unique(append(deed_agents, deed_agencies))
+length(deed_all_title_names)
+```
+
+############################
+## Parcel ID evaluation ###
+############################
+
+###Unique property counts
+```{r}
+unique_prop_parcels <- unique(prop_jobs$PropertyId)
+hills_prop_parcels <- unique(prop_jobs[County == "Hillsborough"]$PropertyId) #unique prop hillsborough parcel IDs
+
+length(prop_jobs$PropertyId) #Total   - 69380
+length(unique_prop_parcels)  #Uniques - 58224
+
+length(unique_prop_parcels)/length(prop_jobs$PropertyId) # ~84% Unique proplogix properties within proplogix jobs
+length(hills_prop_parcels)/length(unique_prop_parcels) # ~13.5% of unique proplogix parcels come from Hillsbrough
+
+
+
+nrow(reduced[`Parcel ID Number` == ""])/nrow(reduced) # 22.8% of parcel ID are missing currently when 
+
+sort(table(reduced[`Parcel ID Number` %in% unique_prop_parcels]$`Parcel ID Number`), decreasing =  T)
+
+length(unique(reduced[`Parcel ID Number` %in% unique_prop_parcels]$`Parcel ID Number`)) #1533 unique parcel IDs in deed data matched to prop data
+
+
+#proportion of unique properties in the prop data out of the total observed deed data.
+length(unique(reduced[`Parcel ID Number` %in% unique_prop_parcels]$`Parcel ID Number`))/length(unique(reduced$`Parcel ID Number`)) # ~8.5%
+
+#Hillsborough only
+
+sort(table(reduced[`Parcel ID Number` %in% hills_prop_parcels]$`Parcel ID Number`), decreasing =  T)
+
+length(unique(reduced[`Parcel ID Number` %in% hills_prop_parcels]$`Parcel ID Number`)) #1533 unique parcel IDs in deed data matched to prop data
+
+
+#proportion of unique properties in the prop data out of the total observed deed data.
+length(unique(reduced[`Parcel ID Number` %in% hills_prop_parcels]$`Parcel ID Number`))/length(unique(reduced$`Parcel ID Number`))
+
+
+###################################
+# Levenshtein Distance Clustering # Defunct - vector too large for adist
+###################################
+# 
+# d  <- adist(reduced$`Title Agent`)
+# rownames(d) <- reduced$`Title Agent`
+# hc <- hclust(as.dist(d))
+# plot(hc) #this is a mess with so many clusters
+# 
+# 
+# ### cluster based on tree height differences ###
+# num.height <- 0.5 # at least half tree height for cluster to be unique
+# p <- cutree(hc, h = num.height)
+# plot(p)
+# 
+# 
+# title_agent_clusters <- data.frame(names = reduced$`Title Agent`, group.prob = p)
+# title_company_clusters <- data.frame(names = reduced$`Title Company`, group.prob = p)
+
+
+#####################################################################
+### alternate method for clustering based on agrep self-groupings ###
+#####################################################################
+
+agent_groups <- list()
+x <- reduced$`Title Agent`
+i <- 1
+
+while(length(x) > 0){
+  
+  if (nchar(x[1]) > 5) { 
+    id <- agrep(x[1], x, ignore.case = TRUE, max.distance = 0.15)
+    agent_groups[[i]] <- x[id]
+    x <- x[-id]
+  }
+  else {
+    agent_groups[[i]] <- x[1]
+    x <- x[-1]
+  }
+  i <- i + 1
+}
+
+head(agent_groups)
+tail(agent_groups)
+
+
+
+#picking the most common name within a cluster, and creating a set of those primary names
+deeds_primary_title_names <- list()
+
+for (i in 1:length(agent_groups)){
+  deeds_primary_title_names <- c(deeds_primary_title_names, names(sort(table(agent_groups[[i]]), decreasing = TRUE)[1]))}
+deeds_primary_title_names <- unlist(deeds_primary_title_names)
+
+for (i in 1:length(agent_groups)){
+  names(agent_groups[[i]]) <- names(sort(table(agent_groups[[i]]), decreasing = TRUE)[1])}
+
+head(deeds_primary_title_names, 100)
+
+
+#######################################################################
+### Linking Proplogix Records ###
+#######################################################################
+
+
+########################################################
+### testing deed and prop record matching with dplyr ###
+########################################################
+
+wordlist <- expand.grid(words = deeds_primary_title_names , ref = prop_all_title_names, stringsAsFactors = FALSE)
+matches <- wordlist %>% group_by(words) %>% mutate(match_score = 1-stringdist(words, ref, method = 'jw')) %>%
+  summarise(match = match_score[which.max(match_score)], matched_to = ref[which.max(match_score)])
+
+matches <- data.table(matches)
+matches[match > .87]
+
+################################################################
+# testing %like% agent name matching of deed and prop records  #
+################################################################
+
+like_agent_matched_records <- data.table()
+
+
+for (i in 1:length(prop_all_title_names)){
+  if (nrow(reduced[`Title Agent` %like% prop_all_title_names[i]]) != 0){
+    like_agent_matched_records <- rbind(like_agent_matched_records, reduced[`Title Agent` %like% prop_all_title_names[i]])
+    #reduced[`Title Agent` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Title Agent` := shorter]
+    
+  }
+}
+
+like_agent_matched_records #2143
+
+
+### Hillsborough specific version of above agent matching
+
+hills_agent_matched_records <- data.table()
+
+
+for (i in 1:length(hills_all_title_names)){
+  if (nrow(reduced[`Title Agent` %like% hills_all_title_names[i]]) != 0){
+    hills_agent_matched_records <- rbind(hills_agent_matched_records, reduced[`Title Agent` %like% hills_all_title_names[i]])
+    #reduced[`Title Agent` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Title Agent` := shorter]
+    
+  }
+}
+
+hills_agent_matched_records #1805
+
+######################################################
+# matching records by parcel ID                     ##
+######################################################
+
+parcel_matched_records <- data.table()
+
+for (i in 1:length(unique_prop_parcels)){
+  if (nrow(parcel_reduced[`Parcel ID Number` %in% unique_prop_parcels[i]]) != 0){
+    
+    parcel_matched_records <- rbind(like_parcel_matched_records, parcel_reduced[`Parcel ID Number` %in% unique_prop_parcels[i]])
+    #reduced[`Title Agent` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Title Agent` := shorter]
+    
+  }
+}
+
+parcel_matched_records
+
+
+#aggregating the parcel # matching and the agent name matching
+all_matched_records <- unique(merge(parcel_matched_records, like_agent_matched_records, all = T))
+all_matched_records
+
+########################################################################
+#following is Hillsborough exclusive of the above parcel matching code #
+########################################################################
+
+hills_parcel_matched_records <- data.table()
+
+for (i in 1:length(hills_prop_parcels)){
+  if (nrow(parcel_reduced[`Parcel ID Number` %in% hills_prop_parcels[i]]) != 0){
+    
+    hills_parcel_matched_records <- rbind(like_parcel_matched_records, parcel_reduced[`Parcel ID Number` %in% hills_prop_parcels[i]])
+    #reduced[`Title Agent` %in% prop_all_title_names[prop_all_title_names %like% prop_all_title_names[i]], `Title Agent` := shorter]
+    
+  }
+}
+
+hills_parcel_matched_records #2777
+
+
+hills_matched_records <- unique(merge(hills_parcel_matched_records, hills_agent_matched_records, all = T))
+hills_matched_records #3746
+
+
+hills_matched_counts <- as.data.frame(sort(table(hills_matched_records$`Title Agent`), decreasing = T)[2:22])
+hills_matched_counts
+
+
+## testing replacing original records with matched values ##
+
+test <- reduced
+test_match <- data.table()
+
+for (i in 1:length(prop_jobs$PropertyId)){
+  if (nrow(test[`Parcel ID Number` %in% unique_prop_parcels]) != 0){
+    test_match <- rbind( test_match, test[`Parcel ID Number` == prop_jobs$PropertyId[i]]$`Parcel ID Number`) #, `Title Agent` := names(agent_groups[[j]][1])]
+    #test$`Title Agent`[i] <- names(agent_groups[[j]][1])
+    #matches[words == names(sort(table(agent_groups[[j]]), decreasing = TRUE)[1])]$matched_to
+  }
+}
+test_match
+
+```
+#########################
+# Plotting and Viz  ###
+#########################
+
+###########################
+###    PROPLOGIX DATA
+###########################
+
+
+##############################################
+##### Title Agent/Agency quantification ######
+
+
+#######################################
+####          All PropLogix Data       ####
+
+##### plot of top 20 client agents by jobs in proplogix data
+
+```{r}
+prop_agent_counts <- as.data.frame(sort(table(prop_jobs$Agent), decreasing = T)[2:21]) #first element is stewart title, an agency, so exlcuded and moved to next plot
+
+ggplot(data = prop_agent_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Proplogix Client Agents", y = "# of records in Proplogix data") +
+  ggtitle("Top 20 Agents by raw Proplogix job volume")
+
+## plot of top 20 client agencies by their job counts with proplogix
+
+prop_agency_counts <- as.data.frame(sort(table(prop_jobs$Agency), decreasing = T)[1:20])
+
+ggplot(data = prop_agency_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25)) +
+  labs(x = "Proplogix Client Agencies", y = "# of records in Proplogix data") +
+  ggtitle("Top 20 Agencies by raw Proplogix job volume")
+
+
+## count of most agents per agency in prop data
+
+prop_agents_per_agency <- setorder(prop_jobs[, .(number_of_agents = uniqueN(Agent)), by = Agency], -number_of_agents)
+
+
+ggplot(data = prop_agents_per_agency, aes(x= Agency, y = number_of_agents, order)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Agencies", y = "# of Agents in Proplogix data") +
+  ggtitle("Top 20 Agencies by # of Agents seen in Proplogix data") +
+  scale_x_discrete(limits = prop_agents_per_agency$Agency[1:20])
+
+
+
+```
+
+###############################################
+#####        Hillsborough Only   ############
+
+
+## plot of top 20 agents by jobs in proplogix data
+```{r}
+prop_hills_agent_counts <- as.data.frame(sort(table(prop_jobs[County == "Hillsborough"]$Agent), decreasing = T)[1:20])
+
+ggplot(data = prop_hills_agent_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Hillsborough Agents", y = "# of records in Proplogix data") +
+  ggtitle("Top 20 Hillsborough Agents by raw Proplogix job volume")
+
+## plot of top 20 client agencies by their job counts with proplogix
+
+prop_hills_agency_counts <- as.data.frame(sort(table(prop_jobs[County == "Hillsborough"]$Agency), decreasing = T)[1:20])
+
+ggplot(data = prop_hills_agency_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Hillsborough Agencies", y = "# of records in Proplogix data") +
+  ggtitle("Top 20 Hillsborough Agencies by raw Proplogix job volume")
+
+
+## count of most agents per agency in prop data
+
+hills_agents_per_agency <- setorder(prop_jobs[County == "Hillsborough", .(number_of_agents = uniqueN(Agent)), by = Agency], -number_of_agents)
+
+
+ggplot(data = hills_agents_per_agency, aes(x= Agency, y = number_of_agents, order)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Hillsborough Agencies", y = "# of Agents in Proplogix data") +
+  ggtitle("Top 20 Hillsborough Agencies by # of Agents seen in Proplogix data") +
+  scale_x_discrete(limits = hills_agents_per_agency$Agency[1:20])
+
+
+
+### Orders By County ###
+ 
+
+
+prop_orders <- fread("C:/Users/trobart/Downloads/FL_FIPSCodes (1).csv")
+
+# df_pop_county[region == prop_orders$FIPSCode, value := prop_orders$`Orders(LN)`]
+
+
+county_choropleth(prop_orders, 
+                  state_zoom = "florida",
+                  title      = "PropLogix Job Counts (Raw) by County \n (Mar. 1st, 2016 - Feb. 1st, 2017)",
+                  legend     = "Jobs",
+                  num_colors = 1) + coord_map() 
+
+county_choropleth(prop_orders, 
+                  state_zoom = "florida",
+                  title      = "PropLogix jobs (Log Scale) by County\n (Mar. 1st, 2016 - Feb. 1st, 2017)",
+                  legend     = "Proportion of Jobs",
+                  num_colors = 1) + 
+  coord_map() + 
+  scale_fill_gradient(
+    high = 'green',
+    low = 'white',
+    trans="log",
+    label = scales::log_breaks()
+  )
+
+OrdersByCounty <- fread('C:/Users/trobart/Downloads/tanner_queries.csv')
+PaymentsByCounty <- fread('C:/Users/trobart/Downloads/tanner_queries4.csv')
+
+
+OrdersByCounty[,region := County]
+OrdersByCounty[,value := Payments]
+OrdersByCounty[,County := NULL]
+OrdersByCounty[,Payments := NULL]
+
+OrdersByCounty$region <- factor(OrdersByCounty$region)
+
+OrdersByCounty_ggplot <- county_choropleth(OrdersByCounty, aes(
+  state_zoom = "florida",
+  title      = "PropLogix Job Counts (Raw) by County \n (March, 2016 - March, 2017)",
+  legend     = "Jobs",
+  frame = c(Year, Month),
+  num_colors = 1)) + coord_map() 
+
+gganimate(OrdersByCounty_ggplot)
+
+```
+### Payments by Client ####
+
+```{r}
+PaymentsByClient <- fread('C:/Users/trobart/Downloads/tanner_queries3.csv') #load data
+
+#split client field out into name and location
+PaymentsByClient <- cSplit(PaymentsByClient, "Client", "- ")
+PaymentsByClient[!is.na(Client_3),Client_2 := Client_3]
+PaymentsByClient[,Location := Client_2]
+PaymentsByClient[,Client := Client_1]
+PaymentsByClient[,c("Client_1","Client_2", "Client_3") := NULL]
+
+
+
+total_payments <- aggregate(Payments ~ Client, data = PaymentsByClient, FUN = sum)
+
+
+sum(total_payments$Payments) # $6,628,077 (2016-2017)
+
+
+
+sorted_client_payments <- total_payments[order(-total_payments$Payments),]
+head(sorted_client_payments)
+
+
+# raw revenue
+ggplot(head(sorted_client_payments, 10)) + 
+  geom_bar(stat = "identity") + 
+  theme( axis.ticks.length = unit(.5, "cm"), axis.text.x= element_text(angle=25 )) + 
+  aes(y = Payments, x = reorder(Client, -Payments), fill = Payments) +
+  scale_y_continuous(labels = comma) +
+  labs(y = "$ USD (Raw)", x = "Clients") +
+  ggtitle("Total Revenue By Client (Top 10) (2016-2017)")
+
+
+# percent of total revenue
+ggplot(head(sorted_client_payments, 10), aes( x = reorder(Client, -Payments))) + 
+  geom_bar(stat = "identity", aes( y = Payments/sum(total_payments$Payments), fill = Payments)) + 
+  theme( axis.ticks.length = unit(.5, "cm"), axis.text.x= element_text(angle=25 )) + 
+  scale_y_continuous(labels = comma) +
+  scale_fill_continuous(low = "grey27", high = "green", limits= c(0,700000), label = comma) +
+  labs(y = "%", x = "Clients", fill = "Range") +
+  ggtitle("% PropLogix Revenue By Client (Top 10) (2016-2017)")
+```
+################################
+##          Deed Plots          #
+################################
+
+#### plot of top 20 client agents by their raw counts in deed data
+
+```{r}
+deed_agent_counts <- as.data.frame(sort(table(reduced$`Title Agent`), decreasing = T)[1:20])
+
+
+ggplot(data = deed_agent_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Deed Agents", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agents by raw Deed record counts") 
+  #scale_x_discrete(limits = sort(table(reduced$`Title Agent`), decreasing = T)[1:20])
+
+
+## plot of top 20 client agents by their proportion in deed data (pretty much identical to previous)
+
+percent <- as.data.frame(sort(table(reduced$`Title Agent`), decreasing = T))$Freq/sum(as.data.frame(sort(table(reduced$`Title Agent`), decreasing = T))$Freq)
+
+ggplot(data = deed_agent_counts, aes( x= Var1, y = percent[1:20])) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Deed Agents", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agents by raw Deed record counts") 
+  #scale_x_discrete(limits = sort(table(reduced$`Title Agent`), decreasing = T)[1:20])
+  
+## plot of top 20 client agencies by their raw counts in deed data
+
+deed_agency_counts <- as.data.frame(sort(table(reduced$`Title Company`), decreasing = T)[2:32])
+
+deed_agency_counts <- deed_agency_counts[c(-1, -4, -8, -11, -13,-16:-20, -22, -26),] #removing junk rows
+
+
+ggplot(data = deed_agency_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Deed Agencies", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agencies by raw Deed record counts")
+
+
+## count of most agents per agency in deed data
+
+deeds_agents_per_agency <- setorder(reduced[, .(number_of_agents = uniqueN(`Title Agent`)), by = `Title Company`], -number_of_agents)
+
+
+ggplot(data = deeds_agents_per_agency[1:20], aes(x= `Title Company`, y = number_of_agents, order)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=90 )) +
+  labs(x = "Hillsborough Agencies", y = "# of Agents in Proplogix data") +
+  ggtitle("Top 20 Hillsborough Agencies by # of Agents seen in Proplogix data") +
+  scale_x_discrete(limits = deeds_agents_per_agency$Agency)
+
+```
+##################################################
+# Matched proplogix/deed records and exclusions  #
+##################################################
+```{r}
+
+## top 20 counts of proplogix matched agents/agencies in the deed scraped data
+hills_matched_counts # defined above
+ggplot(data = hills_matched_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30)) +
+  labs(x = "Hillsborough Clients", y = "# of prop matched records in deed data") +
+  ggtitle("Top 20 Hillsborough Clients by raw job volume as matched to proplogix data")
+```
+
+## Top 20 deed agents in deed data explicitly NOT in the proplogix data agent names
+```{r}
+deed_agents_not_in_prop_agents_counts <- as.data.frame(sort(table(reduced[!(`Title Agent` %in% all_matched_records$`Title Agent`) ]$`Title Agent`), decreasing = T)[1:22])
+deed_agents_not_in_prop_agents_counts <- deed_agents_not_in_prop_agents_counts[c(-6,-12),]
+#| !(`Parcel ID Number` %in% all_matched_records$`Parcel ID Number`)
+ggplot(data = deed_agents_not_in_prop_agents_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Deed Agents not in Prop Agents", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agents NOT in proplogix agents by raw Deed record volumes")
+
+## Top 20 deed agents in deed data explicitly NOT in the proplogix agent names AND parcel IDs
+
+deed_agents_not_in_prop_agents_and_parcels_counts <- as.data.frame(sort(table(reduced[!(`Title Agent` %in% all_matched_records$`Title Agent`) & !(`Parcel ID Number` %in% all_matched_records$`Parcel ID Number`) ]$`Title Agent`), decreasing = T)[1:21])
+deed_agents_not_in_prop_agents_and_parcels_counts <- deed_agents_not_in_prop_agents_and_parcels_counts[-2,]
+ggplot(data = deed_agents_not_in_prop_agents_and_parcels_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=25 )) +
+  labs(x = "Deed Agents not in Prop Agents or Parcels", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agents NOT in proplogix agents and parcel IDs by raw Deed record volumes")
+
+
+
+######    Redacted because only 2 items of the original deed list were present in prop data, not enough to make a meaningful comparison of proportion diffs
+# 
+# ## top 20 client agents by their proportion in deed data, compared beside the same clients proportions in prop data
+# percent <- as.data.frame(sort(table(reduced$`Title Agent`), decreasing = T))$Freq/sum(as.data.frame(sort(table(reduced$`Title Agent`), decreasing = T))$Freq)
+# prop_percent <- as.data.frame(sort(table(prop_jobs$Agent), decreasing = T))$Freq/sum(as.data.frame(sort(table(prop_jobs$Agent), decreasing = T))$Freq)
+# 
+# 
+# ggplot(data = deed_agent_counts, aes( x= Var1, y = c(percent[1:20], prop_percent[1:20]))) + 
+#   geom_bar(stat= "identity") +
+#   theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+#   labs(x = "Deed Agents", y = "# of records in Deed data") +
+#   ggtitle("Top 20 Agents by raw Deed record volumes") 
+
+
+
+#################### warning poor data quality on following plot
+
+deed_agencies_not_in_prop_agencies_counts <- as.data.frame(sort(table(reduced[!(`Title Company` %in% all_matched_records$`Title Company`) ]$`Title Agent`), decreasing = T)[1:25])
+deed_agencies_not_in_prop_agencies_counts <- deed_agencies_not_in_prop_agencies_counts[c(-1, -3, -5, -7, -11, -19, -21 ),]
+
+ggplot(data = deed_agencies_not_in_prop_agencies_counts, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Deed Agents not in Prop Agencies", y = "# of records in Deed data") +
+  ggtitle("Top 20 Agents NOT in proplogix Agencies by raw Deed record volumes")
+
+```
+
+
+### Identifying the biggest cancellers, and seeing if we can check on the truth of the cancel in the deed data
+```{r}
+
+largest_cancels <- as.data.frame(sort(table(prop_jobs[Status == "Cancelled"]$Agency), decreasing = T)[1:20])
+
+ggplot(data = largest_cancels, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Agencies", y = "# of Cancelled Jobs") +
+  ggtitle("Top 20 Cancelling Agencies")
+
+
+largest_cancels_in_deeds <- as.data.frame(sort(table(prop_jobs[PropertyId %in% parcel_reduced$`Parcel ID Number`][Status == "Cancelled"]$Agency), decreasing = T)[1:20])
+
+ggplot(data = largest_cancels_in_deeds, aes( x= Var1, y = Freq)) + 
+  geom_bar(stat= "identity") +
+  theme( axis.ticks.length = unit(.3, "cm"), axis.text.x= element_text(angle=30 )) +
+  labs(x = "Agencies", y = "# of cancelled properties in deed data") +
+  ggtitle("Top 20 Cancelling Agencies where properties were found in deed data ")
+
+cancelled <- prop_jobs[PropertyId %in% parcel_reduced$`Parcel ID Number`][Status == "Cancelled"]
+parcel_reduced[(`Parcel ID Number` %in% cancelled$PropertyId) & (as.Date(`Date of Record`) > as.Date('2016-05-02'))]
+
+cancelled[, `Parcel ID Number` := PropertyId]
+new <- merge(cancelled, parcel_reduced, by = 'Parcel ID Number')
+
+new[Agent == `Title Agent`]
+new[Agency == `Title Company`]
+
+
+#### Berlin patten cancels subset 
+berlin_patten_cancels <- prop_jobs[PropertyId %in% parcel_reduced$`Parcel ID Number`][Status == "Cancelled"][Agency == "berlin patten ebling pllc"]
+berlin_patten_cancels[, `Parcel ID Number` := PropertyId]
+berlin_matched <- merge( berlin_patten_cancels, parcel_reduced, by = "Parcel ID Number")
+berlin_matched[, `Instrument Number` := NULL]
+
+
+write.csv(berlin_matched, "berlin_patten_cancels.csv")
+```
+
+
+#############################################################################
+## Relationship network map of Proplogix client Title Agents and Agencies  ##
+#############################################################################
+
+
+```{r}
+nodes <- as.data.frame(unique(unlist(list(unique(prop_jobs$Agent), unique(prop_jobs$Agency)))))
+
+edges <- prop_jobs[, list(Freq = .N), by= list(Agent, Agency)]
+
+visNetwork(nodes, edges, main = "Title Agents!")
+
+net <- graph.data.frame(edges, nodes, directed = F)
+
+net <- simplify(net, remove.multiple = F, remove.loops = T) 
+
+
+# V(net)$color <- colrs[V(net)]
+weights <- (edges$Freq)/sum(edges$Freq)
+E(net)$width <- weights
+l <- layout.fruchterman.reingold(net)
+
+plot(net,vertex.label=NA, layout = l, rescale=F, vertex.size=12)
+
+dg <- decompose.graph(net)
+
+
+
+for (i in 1:length(dg)){
+  
+  l <- layout.fruchterman.reingold(dg[[i]])
+  if (length(E(dg[[i]])) > 4){
+    weights <- (edges$Freq)
+    E(net)$width <- weights
+    V(dg[[i]])[ degree(dg[[i]]) > 2]$color <- "red"
+    V(dg[[i]])[ degree(dg[[i]]) <= 2]$color <- "gold"
+    plot(dg[[i]], layout = l, vertex.size=15)
+    }
+}
+```
+
+
+
+#####################################################
+## Relationship network map of the observed deed data 
+#####################################################
+
+```{r}
+nodes <- unique(unlist(list(unique(reduced$`Title Company`), unique(reduced$`Title Agent`))))
+
+edges <- reduced[, list(Freq = .N), by= list(`Title Company`, `Title Agent`)]
+
+net <- graph.data.frame(edges, nodes, directed = F)
+
+# net <- simplify(net, remove.multiple = F, remove.loops = T)  #reduces the network by removing self-loops and redundant connections
+
+
+weights <- (edges$Freq)/sum(edges$Freq)
+E(net)$width <- weights
+l <- layout.fruchterman.reingold(net)
+
+plot(net,vertex.label=NA, layout = l, rescale=F, vertex.size=12)
+
+dg <- decompose.graph(net)
+
+
+
+for (i in 1:length(dg)){
+  
+  l <- layout.fruchterman.reingold(dg[[i]])
+  if (length(E(dg[[i]])) > 3){
+    weights <- (edges$Freq)
+    E(net)$width <- weights
+    V(dg[[i]])[ degree(dg[[i]]) > 2]$color <- "red"
+    V(dg[[i]])[ degree(dg[[i]]) <= 2]$color <- "gold"
+    plot(dg[[i]], layout = l, vertex.size=15)
+    }
+}
+```
