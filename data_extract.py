@@ -1,7 +1,24 @@
+ #    © Tanner Robart 2017
+
+ #    This file is part of Scrapy-McScrapeface.
+
+ #    Scrapy-McScrapeface is free software: you can redistribute it and/or modify
+ #    it under the terms of the GNU General Public License as published by
+ #    the Free Software Foundation, either version 3 of the License, or
+ #    (at your option) any later version.
+
+ #    Scrapy-McScrapeface is distributed in the hope that it will be useful,
+ #    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ #    GNU General Public License for more details.
+
+ #    You should have received a copy of the GNU General Public License
+ #    along with Scrapy-McScrapeface.  If not, see <http://www.gnu.org/licenses/>.
+
 import os, glob, re, string, copy, sys
 from tqdm import tqdm
 
-hard_path = "C:/Users/trobart/Desktop/Deeds/extracted_data/"
+hard_path = "~/Desktop/Deeds/extracted_data/"
 # data_path = input("Please enter filepath to OCR CSV:")
 
 os.chdir(hard_path)
