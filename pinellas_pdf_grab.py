@@ -82,7 +82,7 @@ def pinellas_scrape(begin_date = "", end_date = ""):
     # initializing variables
     
     captcha_page = "https://public.co.pinellas.fl.us/captcha/captcha.jsp?successPage=/login/captcha_success.jsp"
-    download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/pinellas"
+    download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/pinellas/2017"
     username = "1WEBUSER"
     password = "FREEACCNT" 
     last_instrument = ""
@@ -110,7 +110,6 @@ def pinellas_scrape(begin_date = "", end_date = ""):
         "download.open_pdf_in_system_reader": False
         })
     #options.add_argument('--headless')
-    
     driver = webdriver.Chrome(executable_path=r'C:/Users/trobart/Downloads/chromedriver.exe' , chrome_options = options)
     driver.get(captcha_page)
 

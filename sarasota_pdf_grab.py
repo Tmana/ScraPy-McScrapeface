@@ -33,39 +33,10 @@ try:
 except ImportError:
         print( "[*] Please download and install Beautiful Soup first!")
         sys.exit(0)
- 
-
-def tiny_file_rename(newname, folder_of_download):
-        try:
-            filename = max([f for f in glob.glob(os.path.join(folder_of_download, "null*"))], key=lambda xa :   os.path.getctime(os.path.join(folder_of_download,xa)))
-            if 'null' in filename:
-                try:
-                    os.rename(os.path.join(folder_of_download, 'null.pdf'), os.path.join(folder_of_download, newname))
-                except FileNotFoundError:
-                    print("File Not Found")
-                    pass
-                except FileExistsError:
-                    print("SKIPPED")
-                    os.remove(filename)
-            else:
-                time.sleep(2)
-                try:
-                    os.rename(os.path.join(folder_of_download, 'null.pdf'), os.path.join(folder_of_download, newname))
-                except FileNotFoundError:
-                    print("File Not Found")
-                    pass
-                except FileExistsError:
-                    print("SKIPPED 2")
-                    os.remove(filename)
-        except:
-            print('failed rename, skipping')
-            time.sleep(2)
-            pass
-        
 
 
 
-def sarasota_scrape():
+def sarasota_scrape(begin_date = "", end_date = ""):
 
 
         # initializing variables
@@ -73,12 +44,13 @@ def sarasota_scrape():
         landing_page = "https://clerkpublicrecords.scgov.net/RealEstate/SearchEntry.aspx"
         download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/sarasota"
         last_instrument = ""
-        i = 0
+        i = 1
 
-        date1 = input("Please input a start date (mm-dd-yyyy):")
-        begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
-        date2 = input("Please input an end date (mm-dd-yyyy):")
-        end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
+        if begin_date == "":
+                date1 = input("Please input a start date (mm-dd-yyyy):")
+                begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
+                date2 = input("Please input an end date (mm-dd-yyyy):")
+                end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
 
         delta_date = end_date - begin_date
         os.chdir(download_path)
@@ -95,8 +67,10 @@ def sarasota_scrape():
         "plugins.always_open_pdf_externally": True,
         "download.open_pdf_in_system_reader": False
         })
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu')
+
+        #options.add_argument('--headless')
+        #options.add_argument('--disable-gpu')
+        options.add_argument("window-size=1024,900")
         options.binary_location = 'C:/Users/trobart/AppData/Local/Google/Chrome SxS/Application/chrome.exe'
         driver = webdriver.Chrome(executable_path=r'C:/Users/trobart/Downloads/chromedriver.exe' , chrome_options = options)
         driver.get(landing_page)
@@ -109,46 +83,46 @@ def sarasota_scrape():
         deed_button.click()
         search = driver.find_element_by_xpath("//*[@id='ctl00_cphNoMargin_SearchButtons2_btnSearch']")
         search.click()
+        try:
+                while 1:
+                
 
+                        #now that we've landed past the landing page, and have a valid session, move through the search query and download pdfs
+                        driver.get("https://clerkpublicrecords.scgov.net/RealEstate/SearchResults.aspx?pg={}".format(i))
+                        print("page: ", i)
+                        first_image = driver.find_element_by_xpath("//*[@id='x:1533160306.14:adr:0:tag::chlGCnt:0:exp:False:iep:False:ppd:False']/td[2]")
+                        first_image.click()
 
-        try:    
-            #now that we've landed past the captcha, and have a valid session, move to the search query
-            driver.get(url)
-            
-            html = driver.page_source #grabbing html from selenium driver
-            soup = BeautifulSoup(html, "lxml") # using beautifulsoup to parse the website html
+                        #opens new window, we have to switch to it
+                        another_window = list(set(driver.window_handles) - {driver.current_window_handle})[0]
+                        driver.switch_to.window(another_window)
+                        time.sleep(1)
+                        # iterate over all documents in the search date range
+                        for j in range(1,26):
+                                try:    
+                                        iframe = driver.find_element_by_xpath("//iframe")
+                                        driver.switch_to_frame(iframe)
+                                        time.sleep(2)
+                                        page1 = driver.find_element_by_xpath("//*[@id='pageList_0']")
+                                        page1.click()
+                                        instrument = driver.find_element_by_xpath("//*[@id='lblInstNum']").text
+                                        get_image = driver.find_element_by_xpath("//*[@id='btnProcessNow__5']")
+                                        get_image.click()
 
-            
-
-            # Iterate over the records table on each page
-            if table.findAll('tr')[1:]:
-                for row in table.findAll('tr')[1:]:
-                    instrument = row.findAll('td')[-1].text
-                    j = int(row.td.text)
-
-                    for tag in row.findAll('a', href=True): #find <a> tags with href in it so you know it is for urls
-                                                             #so that if it doesn't contain the full url itself to it for the download
-                            if "NewWindowInit" in tag['href'] and instrument != last_instrument:
-
-                                    
-                                    driver.find_element_by_xpath("//*[@id='tableA']/tbody/tr[{0}]/td[2]/a[3]".format(j)).click()
-                                    
-                                    #close tab 
-                                    time.sleep(1)
-                                    driver.switch_to_window(driver.window_handles[1])
-                                    driver.close()
-                                    driver.switch_to_window(driver.window_handles[0]) # switch back to main page
-
-                                    print( "\n[*] Downloading: #{2} - {0} - row {1}".format(instrument, j, i))
-
-                                    tiny_file_rename( "pinellas" + "_" + instrument + ".pdf", download_path) # rename from null to correct name
-                                    last_instrument = instrument 
-                                    i+=1
-            else:
-                pass
-
-                    
-                    print( "\n[*] Downloaded %d files" %(i+1))
+                                        time.sleep(1)
+                                        driver.get("https://clerkpublicrecords.scgov.net/Controls/printHelper.aspx?err=skipplugin")
+                                        print("downloaded: ", instrument)
+                                        iframe = driver.find_element_by_xpath("//iframe")
+                                        driver.switch_to_frame(iframe)
+                                        close_image = driver.find_element_by_xpath("//*[@id='x:1335771012.4:mkr:Close']")
+                                        close_image.click()
+                                        next_image = driver.find_element_by_xpath("//*[@id='_imgNext']")
+                                        next_image.click()
+                                except:
+                                        print("error, element not found, skipping page")
+                                        break
+                        i +=1
+               
                     
            
         except KeyboardInterrupt:
