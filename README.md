@@ -26,3 +26,12 @@ The pipeline can be summarized by the following steps:
 - Sarasota and Pinellas scrapers require a headed browser driver to navigate past captcha/pages. As such, their performance is somewhat slow and obtrusive compared to the headless scrapers. Plans are to alter these scrapers to a use a headless driver in the future. 
 - Sarasota scraper currently skips pages occasionally, fixing this behavior is a high priority.
 - Network visualization produces some minimally interesting results for proplogix data, and not much of use from the scraped data.
+
+- Ordered (based on proplogix job order volume) list of next highest priority Counties to Scrape: 
+    - Orange 
+    - Broward 
+    - Miami-Dade
+    - Palm Beach
+    - Seminole
+    - Polk
+    - Osceola   
