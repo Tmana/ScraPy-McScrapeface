@@ -21,16 +21,16 @@ except ImportError:
 
 def manatee_scrape(begin_date = "", end_date = ""):
 
-    if begin_date = "":
-        
+    if begin_date == "":
+
         date1 = input("Please input a start date (mm-dd-yyy):")
-        date1 = datetime.datetime.strptime(date1, '%m-%d-%Y')
+        begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
         date2 = input("Please input an end date (mm-dd-yyy):")
-        date2 = datetime.datetime.strptime(date2, '%m-%d-%Y')
+        end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
 
 
 
-    url = "https://records.manateeclerk.com/OfficialRecords/Search/InstrumentType/11/{0}/{1}/1/10000".format(date1.date().isoformat(), date2.date().isoformat())
+    url = "https://records.manateeclerk.com/OfficialRecords/Search/InstrumentType/11/{0}/{1}/1/10000".format(begin_date.date().isoformat(), end_date.date().isoformat())
     download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/manatee/"
 
     try:

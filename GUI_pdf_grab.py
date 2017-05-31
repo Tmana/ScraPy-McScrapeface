@@ -2,19 +2,22 @@
 
 #    This file is part of Scrapy-McScrapeface. It is owned and licensed by Proplogix. Any use of this code must be explicitly negotiated with Proplogix.
 #    Any use of this code must be explicitly negotiated with Proplogix.
+
+#import scrapers
 import pinellas_pdf_grab
 import duval_pdf_grab
 import sarasota_pdf_grab
 import manatee_pdf_grab
+import hillsborough_pdf_grab
+
+
 import urllib
 import urllib.request
 import os
 import sys
 import re
-import requests
-import pprint
 import datetime
-from http.cookiejar import CookieJar
+
 from pdfrw import PdfReader, PdfWriter
 from easygui import *
 from PyQt4.QtGui import *  
@@ -34,7 +37,7 @@ except ImportError:
 
 # Start of main run loop and GUI control flow
 while 1:
-	msgbox("Proplogix PDF Scraper V0.1")
+	msgbox("Proplogix PDF Scraper V-0.2")
 	msg ="Which Counties' PDFs do you wish to scrape today?"
 	title = "PDF Scraper V0.1"
 	county_choices = ["Manatee", "Sarasota", "Pinellas", "Hillsborough", "Duval"]
@@ -82,7 +85,7 @@ while 1:
 		county_choice.remove("Duval")
 			
 	if "Manatee" in county_choice:
-		manatee_pdf_grab.sarasota_scrape(begin_date, end_date)
+		manatee_pdf_grab.manatee_scrape(begin_date, end_date)
 		county_choice.remove("Manatee")
 
 	if "Sarasota" in county_choice:
