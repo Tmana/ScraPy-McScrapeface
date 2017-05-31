@@ -1,7 +1,3 @@
- #    © Tanner Robart 2017
-
-#    This file is part of Scrapy-McScrapeface. It is owned and licensed by Proplogix. Any use of this code must be explicitly negotiated with Proplogix.
-
 
 import urllib
 import urllib.request
@@ -15,39 +11,29 @@ from http.cookiejar import CookieJar
 from easygui import *
 
 
+def duval_scrape(begin_date = "", end_date = ""):
 
-try:
-	from bs4 import BeautifulSoup
-except ImportError:
-	print( "[*] Please download and install Beautiful Soup first!")
-	sys.exit(0)
+		if begin_date == "":
+		    date1 = input("Please input a start date (mm-dd-yyyy):")
+		    begin_date = datetime.datetime.strptime(date1, '%m-%d-%Y')
+		    date2 = input("Please input an end date (mm-dd-yyyy):")
+		    end_date = datetime.datetime.strptime(date2, '%m-%d-%Y')
 
- 
-def hillsborough_scrape(begin_date = "", end_date= ""):
+        delta_date = end_date - begin_date
 
-		if begin_date = "":
-        
-	        date1 = input("Please input a start date (mm-dd-yyy):")
-	        date1 = datetime.datetime.strptime(date1, '%m-%d-%Y')
-	        date2 = input("Please input an end date (mm-dd-yyy):")
-	        date2 = datetime.datetime.strptime(date2, '%m-%d-%Y')
-	        
-		download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/hillsborough/{0}/".format(datetime.datetime.today().date().isoformat())
-		prev_id = ''
+		download_path = "C:/Users/trobart/Desktop/Deeds/scraped_pdfs/duval/{0}/".format(datetime.datetime.today().date().isoformat())
 		if not os.path.exists(os.path.dirname(download_path)):
 			os.makedirs(os.path.dirname(download_path))
-
-
-		delta_date = end_date - begin_date
-
+		os.chdir(download_path)
+		prev_id = ''
+		
 
 		for i in range(delta_date.days + 1):
 
 			#grabbing a new url query for each day
 			temp_day = begin_date + datetime.timedelta(days=i)
 			temp_day_plus = begin_date + datetime.timedelta(days=i+1)
-
-			url = "http://pubrec3.hillsclerk.com/oncore/search.aspx?bd={0}&ed={1}&bt=O&cfn=2017075349&pt=-1&dt=D%2C%20TAXDEED&st=documenttype".format(temp_day.strftime("%m/%d/%y"), temp_day_plus.strftime("%m/%d/%y"))
+			url = "http://oncore.duvalclerk.com/search.aspx?bd={0}&ed={1}&bt=OR&d=5%2F1%2F2017&pt=-1&dt=DEED&st=documenttype".format(temp_day.strftime("%m/%d/%y"), temp_day_plus.strftime("%m/%d/%y"))
 
 			try:
 				#to make it look like a legit user agent for the url request
@@ -67,11 +53,11 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 					if "id=" in href and href.split("id=")[1].split("&")[0] != prev_id:
 						id_num = href.split("id=")[1].split("&")[0]
 						
-						request = urllib.request.Request("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/default.aspx?id=" + id_num, None, headers)
+						request = urllib.request.Request("http://oncore.duvalclerk.com/ImageBrowser/default.aspx?id=" + id_num, None, headers)
 						url1 = urllib.request.urlopen(request)
 						cookie = url1.headers.get('Set-Cookie')
 
-						request2 = urllib.request.Request("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/ShowPDF.aspx",  None, headers)
+						request2 = urllib.request.Request("http://oncore.duvalclerk.com/ImageBrowser/ShowPDF.aspx",  None, headers)
 						request2.add_header('cookie', cookie)
 						request2.add_header('Connection', 'keep-alive')
 						download = urllib.request.urlopen(request2)
@@ -80,19 +66,19 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 						print( "\n[*] Downloading: %s   Date: %s" %(id_num, temp_day.date().isoformat()))
 						prev_id = id_num
 			 			
-						f = open(download_path + "hillsborough_" + id_num + ".pdf", "wb")
+						f = open(download_path + "duval_" + id_num + ".pdf", "wb")
 						f.write(download.read()) # raw data of response written to file
 						
 						# code to extract only the first page
-						infile = PdfReader(download_path + "hillsborough_" + id_num + ".pdf")
+						infile = PdfReader(download_path + "duval_" + id_num + ".pdf")
 
 						for i, p in enumerate(infile.pages):
 							if i == 0:
-  								PdfWriter().addpage(p).write(download_path + "hillsborough_" + temp_day.date().isoformat() + "_" + id_num + ".pdf")
+  								PdfWriter().addpage(p).write(download_path + "duval_" + temp_day.date().isoformat() + "_" + id_num + ".pdf")
 						f.close()
 
 
-						os.remove(download_path + "hillsborough_" + id_num + ".pdf") #removng original pdf
+						os.remove(download_path + "duval_" + id_num + ".pdf") #removng original pdf
 						i+=1
 			 
 				print( "\n[*] Downloaded %d files" %(i+1))
@@ -113,5 +99,3 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 				print( "I don't know the problem, sorry!! skipping file...")
 				pass
 			html.close()
-
-	
