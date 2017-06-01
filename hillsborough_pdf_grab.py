@@ -11,9 +11,12 @@ import re
 import requests
 import pprint
 import datetime
+from pdfrw import *
 from http.cookiejar import CookieJar
 from easygui import *
-
+import http.client
+http.client.HTTPConnection._http_vsn = 10
+http.client.HTTPConnection._http_vsn_str = 'HTTP/1.0'
 
 
 try:
@@ -47,10 +50,10 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 		temp_day = begin_date + datetime.timedelta(days=i)
 		temp_day_plus = begin_date + datetime.timedelta(days=i+1)
 
-		url = "http://pubrec3.hillsclerk.com/oncore/search.aspx?bd={0}&ed={1}&bt=O&cfn=2017075349&pt=-1&dt=D%2C%20TAXDEED&st=documenttype".format(temp_day.strftime("%m/%d/%y"), temp_day.strftime("%m/%d/%y"))
+		url = "http://pubrec3.hillsclerk.com/oncore/search.aspx?bd={}&ed={}&bt=O&d=6%2F1%2F2017&pt=-1&dt=D&st=documenttype".format(temp_day.strftime("%m/%d/%y"), temp_day.strftime("%m/%d/%y"))
 
 		try:
-			#to make it look like a legit user agent for the url request
+			# to make it look like a legit user agent for the url request
 			headers = {"User-Agent": "Mozilla/5.0 (Windows NT 6.3; WOW64; rv:38.0) Gecko/20100101 Firefox/38.0"}
 		 
 			i = 0
@@ -60,38 +63,28 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 			soup = BeautifulSoup(html.read(), 'lxml') #to parse the website
 
 			for tag in soup.findAll('a', href=True): #find <a> tags with href in it so you know it is for urls
-
-				#so that if it doesn't contain the full url it can the url itself to it for the download
+				# so that if it doesn't contain the full url it can the url itself to it for the download
 				href = str(tag['href'])
-
 				if "id=" in href and href.split("id=")[1].split("&")[0] != prev_id:
 					id_num = href.split("id=")[1].split("&")[0]
+					s = requests.Session()
+					request = s.get("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/default.aspx?id=" + id_num)
 					
-					request = urllib.request.Request("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/default.aspx?id=" + id_num, None, headers)
-					url1 = urllib.request.urlopen(request)
-					cookie = url1.headers.get('Set-Cookie')
-
-					request2 = urllib.request.Request("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/ShowPDF.aspx",  None, headers)
-					request2.add_header('cookie', cookie)
-					request2.add_header('Connection', 'keep-alive')
-					download = urllib.request.urlopen(request2)
-
-					
-					print( "\n[*] Downloading: %s   Date: %s" %(id_num, temp_day.date().isoformat()))
+					download = s.get("http://pubrec3.hillsclerk.com/oncore/ImageBrowser/ShowPDF.aspx")
+		
+					print( "\n[*] #: %s Downloading: %s   Date: %s" %(i, id_num, temp_day.date().isoformat()))
 					prev_id = id_num
 					
 					f = open(download_path + "hillsborough_" + id_num + ".pdf", "wb")
-					f.write(download.read()) # raw data of response written to file
-					
-					# code to extract only the first page
-					infile = PdfReader(download_path + "hillsborough_" + id_num + ".pdf")
-
-					for i, p in enumerate(infile.pages):
-						if i == 0:
-								PdfWriter().addpage(p).write(download_path + "hillsborough_" + temp_day.date().isoformat() + "_" + id_num + ".pdf")
+					f.write(download.content) # raw data of response written to file
 					f.close()
 
 
+					# code to extract only the first page and replace the original with one page version
+					infile = PdfReader(download_path + "hillsborough_" + id_num + ".pdf")
+					for i, p in enumerate(infile.pages):
+						if i == 0:
+								PdfWriter().addpage(p).write(download_path + "hillsborough_" + temp_day.date().isoformat() + "_" + id_num + ".pdf")
 					os.remove(download_path + "hillsborough_" + id_num + ".pdf") #removng original pdf
 					i+=1
 		 
@@ -105,12 +98,14 @@ def hillsborough_scrape(begin_date = "", end_date= ""):
 			print(e.reason)
 			print( "[*] Could not get information from server!!")
 			sys.exit(2)
-		 
+		
 		except:
 			e = sys.exc_info()[0]
 			print(e)
 			print( "I don't know the problem, sorry!! skipping file...")
 			pass
+
 		html.close()
 
-	
+if __name__ == '__main__':
+    hillsborough_scrape()
